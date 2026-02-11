@@ -1,0 +1,81 @@
+//Example 1 type things
+
+use::bevy::prelude::*;
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        // .add_plugins(PeoplePlugin)
+        .run();
+}
+
+
+//This is in its own plugin now
+struct PeoplePlugin;
+impl Plugin for PeoplePlugin {
+    fn build(&self, app: &mut App) {
+        //Add things here
+        app
+        .add_systems(Startup, setup)//only runs 1nce, good for setups/spawner things
+        .add_systems(Update, print_names)
+        .add_systems(Update, people_with_jobs)
+        .add_systems(Update, people_ready_for_hire);
+    }
+}
+
+
+
+
+//use commands to spawn entities
+fn setup(mut commands: Commands)
+{
+    //this entity has Person and Employed components
+    commands.spawn( (
+        Person{name: "Emma".to_string()},
+        Employed{job: Job::Doc},
+    ));
+
+    //This one just has the Person
+    commands.spawn(
+        Person{name: "Emma2".to_string()}
+    );
+}
+
+//to act on componets, use a query
+fn print_names(person_query: Query<&Person>)
+{
+    for person in person_query.iter()
+    {
+        println!("Name is: {}", person.name);
+    }
+}
+
+fn people_with_jobs(person_query: Query<&Person, With<Employed>>)
+{
+    for person in person_query.iter()
+    {
+        println!("Person with job: {}", person.name);
+    }
+}
+fn people_ready_for_hire(person_query: Query<&Person, Without<Employed>>)
+{
+    for person in person_query.iter()
+    {
+        println!("Person with no job: {}", person.name);
+    }
+}
+
+#[derive(Component)]
+struct Person{
+    name: String,
+}
+
+#[derive(Component)]
+struct Employed{
+    job: Job,
+}
+
+enum Job
+{
+    Doc, FireFighter, Lawyer
+}
