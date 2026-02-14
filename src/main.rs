@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-
+use bevy::audio::{AudioPlayer, PlaybackSettings};
 
 //consts
 pub const PLAYER_SPEED: f32 = 500.0;
@@ -18,6 +18,7 @@ fn main()
     //updates
     .add_systems(Update, player_movement)
     .add_systems(Update, confine_player)
+    .add_systems(Update, check_for_collision)
     .run();
 }
 
@@ -37,7 +38,10 @@ impl  Plugin for SpawnersPlugin {
 struct Player{}
 
 #[derive(Component)]
-struct Enemy{}
+struct Collider;
+
+#[derive(Component)]
+struct Star{}
 
 //Spawners
 fn spawn_player(
@@ -59,7 +63,8 @@ fn spawn_player(
                 ..Default::default()
             },
             Transform::from_xyz(window.width()/2.0, window.height()/2.0, 0.0),
-            Player{}
+            Player{},
+            Collider
         )
     );
 
@@ -110,12 +115,37 @@ fn spawn_stars(
                 ..Default::default()
             },
             Transform::from_xyz(clamped_x, clamped_y, 0.0),
-            Enemy {},
+            Star {},
         ));
     }
 }
 
+fn spawn_single_star(
+    commands: &mut Commands,//for spawning entity
+    window_query: Query<&Window, With<PrimaryWindow>>,//for window width,hight info
+    asset_server: &Res<AssetServer>//load the pngs
+)
+{
+    let window: &Window = window_query.single().unwrap();
+    
+    let half_size = STAR_SIZE/2.0;
 
+        let random_x = rand::random::<f32>() * window.width();
+        let random_y = rand::random::<f32>() * window.height();
+
+        //lock to the screen
+        let clamped_x = random_x.clamp(half_size, window.width() - half_size);
+        let clamped_y = random_y.clamp(half_size, window.height() - half_size);
+
+        commands.spawn((
+            Sprite {
+                image: asset_server.load("sprites/star.png"),
+                ..Default::default()
+            },
+            Transform::from_xyz(clamped_x, clamped_y, 0.0),
+            Star {},
+        ));
+}
 
 //move the player
 fn player_movement(
@@ -199,4 +229,33 @@ fn confine_player(
     }
 }
 
+fn check_for_collision(
+    mut commands: Commands,//to despawn/respawn the stars
+    player_query: Query<& Transform, With<Player>>,
+    window_query: Query<&Window, With<PrimaryWindow>>,//for window width,hight info, so that spawn_single_star has it
+    star_query: Query<(Entity, &Transform), With<Star>>,
+    asset_server: Res<AssetServer>,
+)
+{
+    if let Ok (player_transform) = player_query.single()
+    {
+        for star_data in star_query.iter()
+        {
+            let distance = player_transform.translation.distance(star_data.1.translation);
 
+            let player_radius = PLAYER_SIZE/2.0;
+            let star_radius = STAR_SIZE/2.0;
+
+            if distance < player_radius+star_radius 
+            {
+                commands.entity(star_data.0).despawn();
+                spawn_single_star(&mut commands, window_query, &asset_server);
+
+                commands.spawn((
+                AudioPlayer::new(asset_server.load("audio/collect.ogg")),
+                PlaybackSettings::DESPAWN,
+                ));
+            }
+        }
+    }
+}
